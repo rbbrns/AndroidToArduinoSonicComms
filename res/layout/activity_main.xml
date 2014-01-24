@@ -20,18 +20,29 @@
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         android:layout_above="@+id/editText1"
-        android:layout_alignLeft="@+id/button1"
-        android:layout_marginBottom="57dp"
+        android:layout_centerHorizontal="true"
+        android:layout_marginBottom="47dp"
+        android:textSize="30sp"
+        android:text="TextView" />
+
+    <TextView
+        android:id="@+id/textView2"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_alignLeft="@+id/textView1"
+        android:layout_below="@+id/editText1"
+        android:layout_marginLeft="18dp"
+        android:layout_marginTop="44dp"
         android:text="TextView" />
 
     <Button
         android:id="@+id/button1"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:layout_above="@+id/textView1"
         android:layout_alignLeft="@+id/editText1"
         android:layout_alignParentTop="true"
         android:layout_alignRight="@+id/editText1"
-        android:text="Button" />
+        android:layout_marginTop="24dp"
+        android:text="Clear" />
 
 </RelativeLayout>

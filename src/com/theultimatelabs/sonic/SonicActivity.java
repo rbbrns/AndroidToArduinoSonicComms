@@ -2,6 +2,7 @@ package com.theultimatelabs.sonic;
 
 import android.app.Activity;
 import android.content.Context;
+import android.hardware.Camera.Size;
 import android.media.AudioFormat;
 import android.media.AudioManager;
 import android.media.AudioRecord;
@@ -36,7 +37,7 @@ public class SonicActivity extends Activity {
 
 	private EditText editText;
 
-	final double IN_TONES[] = { 16977, 18000 };// { 16700, 18100,
+	final double IN_TONES[] = { 20231, 18000 };// { 16700, 18100,
 												// 17400 };
 	final double OUT_TONES[] = { 19231, 18000 };// { 16700, 18100,
 												// 17400 };
@@ -77,9 +78,11 @@ public class SonicActivity extends Activity {
 		editText = (EditText) findViewById(R.id.editText1);
 		editText.addTextChangedListener(new TextWatcher() {
 			public void afterTextChanged(Editable s) {
+				if(s.length() == 0) return;
 				char l = s.subSequence(s.length() - 1, s.length()).charAt(0);
-				byte[] msg = new byte[]{(byte)l};
-				FMSimpleSend(msg);//(byte) l, (byte) l, (byte) l, (byte) l);
+				byte[] msg = new byte[] { (byte) l };
+				FMSimpleSend(msg);// (byte) l, (byte) l, (byte) l, (byte) l);
+				log.i("send done");
 			}
 
 			public void beforeTextChanged(CharSequence s, int start, int count, int after) {
@@ -97,8 +100,10 @@ public class SonicActivity extends Activity {
 				// sineWave(200,size);
 				// DTMF((byte)0xA4);
 				// DTMFTest(50);
-				byte[] msg = new byte[]{0x55}; 
+				byte[] msg = new byte[] { 0x55 };
 				FMSimpleSend(msg);
+				textView.setText("");
+				editText.setText("");
 				// 0x78);
 				// FMTest();
 				// sleep(3);
@@ -230,7 +235,7 @@ public class SonicActivity extends Activity {
 
 		// byte crc = (byte) ((id + cmd + d1 + d2) & 0xff);
 		// byte msg[] = { id, cmd, d1, d2, crc };
-		final int BIT_PERIOD = 10;
+		final int BIT_PERIOD = 8;
 		final int START_FADE = 1;
 		final int STOP_FADE = 1;
 		double angle = 0;
@@ -244,9 +249,9 @@ public class SonicActivity extends Activity {
 		for (byte m : msg) {
 			for (int b = 0; b < 8; b++) {
 				boolean bit = ((m >> b) & 0x1) != 0;
-				int periodHigh = b==0 ? BIT_PERIOD*2 : (BIT_PERIOD / 2);
-				int periodLow = bit ? BIT_PERIOD*3/2 :  (BIT_PERIOD / 2);
-				
+				int periodHigh = (BIT_PERIOD / 2);
+				int periodLow = bit ? BIT_PERIOD * 2 : (BIT_PERIOD / 2);
+
 				for (int s = 0; s < SAMPLES_MS * periodHigh; s++) {
 					angle += 2 * Math.PI * (OUT_TONES[0] / SAMPLE_RATE);
 					buffer[bufi++] = (short) (Math.sin(angle) * (Short.MAX_VALUE));
@@ -257,7 +262,6 @@ public class SonicActivity extends Activity {
 				}
 			}
 		}
-	
 
 		for (int s = 0; s < STOP_FADE * SAMPLES_MS * BIT_PERIOD; s++) {
 			angle += 2 * Math.PI * (OUT_TONES[0] / SAMPLE_RATE);
@@ -280,240 +284,10 @@ public class SonicActivity extends Activity {
 
 	}
 
-	void FMSend(byte id, byte cmd, byte d1, byte d2) {
-		short buffer[] = new short[SAMPLE_RATE * 2];
-		byte crc = (byte) ((id + cmd + d1 + d2) & 0xff);
-		byte msg[] = { id, cmd, d1, d2, crc };
-		final int START_FADE = 3;
-		final int PAUSE = 3;
-		final int STOP_FADE = 3;
-		final int BIT_PERIOD = 10;
-		// final int BYTE_SAMPLES = buffer.length / (msg.length);
-		// final int BIT_SAMPLES = buffer.length / ((msg.length) * (8 +
-		// START_BITS + STOP_BITS) + START_FADE + STOP_FADE);
-		final float SAMPLES_MS = (SAMPLE_RATE / 1000);
-		double angle = 0;
-		int bufi = 0;
-		int tone = 0;
-
-		for (int s = 0; s < START_FADE * SAMPLES_MS * BIT_PERIOD; s++) {
-			angle += 2 * Math.PI * (OUT_TONES[tone] / SAMPLE_RATE);
-			buffer[bufi++] = (short) (Math.sin(angle) * (Short.MAX_VALUE * ((float) s / (START_FADE * SAMPLES_MS * BIT_PERIOD))));
-		}
-
-		for (int m = 0; m < msg.length; m++) {
-			for (int h = 0; h < 2; h++) {
-				byte hamming = hammingEncode[(msg[m] >> (h * 4)) & 0xf];
-				if (tone != 0)
-					log.e("ERROR tone should be 0");
-				for (int b = 0; b < 8; b++) {
-					tone ^= 1;
-					boolean bit = ((hamming >> b) & 0x1) != 0;
-					/*
-					 * for (int f = 0; f < SAMPLES_MS * BIT_PERIOD; f++) { angle
-					 * += 2 * Math.PI * (OUT_TONES[tone ^ 1] + (tone == 1 ? 1 :
-					 * -1) * (OUT_TONES[1] - OUT_TONES[0]) * (f) / (SAMPLES_MS *
-					 * BIT_PERIOD)) / SAMPLE_RATE; buffer[bufi++] = (short)
-					 * (Math.sin(angle) * (Short.MAX_VALUE)); // buffer[bufi++]
-					 * = (short) (Math.sin(angle) * // (Short.MAX_VALUE *
-					 * ((float) f / // (SAMPLES_MS*BIT_PERIOD)))); }
-					 */
-					for (int i = 0; i < SAMPLES_MS * BIT_PERIOD * (bit ? 2 : 1); i++) {
-						angle += 2 * Math.PI * OUT_TONES[tone] / SAMPLE_RATE;
-						buffer[bufi++] = (short) (Math.sin(angle) * (Short.MAX_VALUE));
-					}
-				}
-				for (int s = 0; s < SAMPLES_MS * PAUSE * BIT_PERIOD; s++) {
-					angle += 2 * Math.PI * OUT_TONES[tone] / SAMPLE_RATE;
-					buffer[bufi++] = (short) (Math.sin(angle) * (Short.MAX_VALUE));
-				}
-			}
-		}
-
-		if (tone != 0)
-			log.e("ERROR tone should be 0");
-
-		for (int s = 0; s < STOP_FADE * SAMPLES_MS * BIT_PERIOD; s++) {
-			angle += 2 * Math.PI * OUT_TONES[tone] / SAMPLE_RATE;
-			buffer[bufi++] = (short) (Math.sin(angle) * (Short.MAX_VALUE * (1.0 - (float) s / (STOP_FADE * SAMPLES_MS * BIT_PERIOD))));
-		}
-
-		AudioTrack track = new AudioTrack(this.STREAM, this.sampleRate, AudioFormat.CHANNEL_OUT_MONO, AudioFormat.ENCODING_PCM_16BIT, bufi * 2,
-				AudioTrack.MODE_STATIC);
-		track.write(buffer, 0, bufi); // write to the audio buffer....
-
-		// and start all over again!
-		track.play();
-
-		while (track.getPlaybackHeadPosition() < bufi) {
-			sleep(1);
-		}
-		track.stop();
-		// this.track.flush();
-		track.release();
-	}
-
-	// ID,CMD,D1,D2,CRC
-	public void FM2(byte id, byte cmd, byte d1, byte d2) {
-		// setVolume(85);
-		short buffer[] = new short[this.samples];
-		byte crc = (byte) ((id + cmd + d1 + d2) & 0xff);
-		byte msg[] = { id, cmd, d1, d2, crc };
-		final int START_BITS = 0;
-		final int STOP_BITS = 0;
-		final int START_FADE = 1;
-		final int STOP_FADE = 1;
-		final int BYTE_SAMPLES = buffer.length / (msg.length);
-		final int BIT_SAMPLES = buffer.length / ((msg.length) * (8 + START_BITS + STOP_BITS) + START_FADE + STOP_FADE);
-
-		double angle = 0;
-		int bufi = 0;
-
-		// FADE IN
-		for (int s = 0; s < START_FADE * BIT_SAMPLES; s++) {
-			angle += 2 * Math.PI * IN_TONES[1] / this.sampleRate;
-
-			buffer[bufi++] = (short) (Math.sin(angle) * (Short.MAX_VALUE * ((float) s / (BIT_SAMPLES))));
-		}
-
-		int tone = 1;
-		for (int m = 0; m < msg.length; m++) {
-			for (int b = -START_BITS; b < 8 + STOP_BITS; b++) {
-				boolean bit = ((msg[m] >> b) & 0x1) != 0;
-				if (b <= -1) {
-					tone = 1;
-				} else if (b >= 8) {
-					tone = tone;
-				} else if (tone == 0) {
-					tone = bit ? 2 : 1;
-				} else if (tone == 1) {
-					tone = bit ? 2 : 0;
-				} else if (tone == 2) {
-					tone = bit ? 1 : 0;
-				}
-				for (int s = 0; s < BIT_SAMPLES; s++) {
-					if (b >= 8)
-						angle = angle; // 0;
-					else
-						angle += 2 * Math.PI * IN_TONES[tone] / this.sampleRate;
-
-					buffer[bufi++] = (short) ((Math.sin(angle)) * Short.MAX_VALUE);
-				}
-			}
-		}
-		// FADE OUT
-		for (int s = 0; s < BIT_SAMPLES * STOP_FADE; s++) {
-			angle += 2 * Math.PI * IN_TONES[tone] / this.sampleRate;
-
-			buffer[bufi++] = (short) (Math.sin(angle) * (Short.MAX_VALUE * (1.0 - (float) s / (BIT_SAMPLES))));
-		}
-
-		AudioTrack track = new AudioTrack(this.STREAM, this.sampleRate, AudioFormat.CHANNEL_OUT_MONO, AudioFormat.ENCODING_PCM_16BIT, buffer.length * 2,
-				AudioTrack.MODE_STATIC);
-		track.write(buffer, 0, buffer.length); // write to the audio buffer....
-												// and start all over again!
-		track.play();
-
-		while (track.getPlaybackHeadPosition() < buffer.length) {
-			sleep(1);
-		}
-		track.stop();
-		// this.track.flush();
-		track.release();
-
-	}
-
-	public void FM1(byte x) {
-		setVolume(100);
-		short buffer[] = new short[this.samples];
-
-		double angle1 = 0;
-		for (int k = 0; k < 3; k++) {
-			int tone = 0;
-			for (int j = -2; j < 8; j++) {
-				boolean b = ((x >> j) & 0x1) != 0;
-				if (j < 0) {
-					tone = 0;
-				} else if (tone == 0) {
-					tone = b ? 3 : 1;
-				} else if (tone == 1) {
-					tone = b ? 3 : 2;
-				} else if (tone == 2) {
-					tone = b ? 3 : 1;
-				} else if (tone == 3) {
-					tone = b ? 2 : 1;
-				}
-				for (int i = 0; i < buffer.length / (3 * 10); i++) {
-					buffer[(k * buffer.length / 3) + (j + 2) * buffer.length / (3 * 10) + i] = (short) ((Math.sin(angle1)) * Short.MAX_VALUE);
-					angle1 += 2 * Math.PI * IN_TONES[tone] / this.sampleRate;
-					// angle2 += 2 * Math.PI * DTMF_TONES[(tone + 2) % 3] /
-					// this.sampleRate;
-				}
-			}
-		}
-
-		AudioTrack track = new AudioTrack(this.STREAM, this.sampleRate, AudioFormat.CHANNEL_OUT_MONO, AudioFormat.ENCODING_PCM_16BIT, buffer.length * 2,
-				AudioTrack.MODE_STATIC);
-		track.write(buffer, 0, buffer.length); // write to the audio buffer....
-												// and start all over again!
-		track.play();
-
-		while (track.getPlaybackHeadPosition() < buffer.length) {
-			sleep(1);
-		}
-		track.stop();
-		track.release();
-
-	}
-
-	public void DTMF(byte x) {
-		setVolume(100);
-
-		short buffer[] = new short[this.samples];
-		double angle1 = 0;
-		double angle2 = 0;
-		int tone = 1;
-		for (int j = -1; j < 8; j++) {
-			boolean b = ((x >> j) & 0x1) != 0;
-			if (j == -1) {
-				tone = 1;
-			} else if (tone == 0) {
-				tone = b ? 2 : 1;
-			} else if (tone == 1) {
-				tone = b ? 2 : 0;
-			} else if (tone == 2) {
-				tone = b ? 1 : 0;
-			}
-			for (int i = 0; i < buffer.length / 9; i++) {
-				// buffer[(j+1)*buffer.length/9 + i] = (short)
-				// ((Math.sin(2*Math.PI * i * DTMF_TONES[tone] /
-				// this.sampleRate)/2 +
-				// Math.sin(2*Math.PI * i * DTMF_TONES[(tone+2)%3] /
-				// this.sampleRate)/2)* Short.MAX_VALUE);
-				buffer[(j + 1) * buffer.length / 9 + i] = (short) ((Math.sin(angle1) / 2 + Math.sin(angle2) / 2) * Short.MAX_VALUE);
-				angle1 += 2 * Math.PI * IN_TONES[tone] / this.sampleRate;
-				angle2 += 2 * Math.PI * IN_TONES[(tone + 2) % 3] / this.sampleRate;
-			}
-		}
-
-		AudioTrack track = new AudioTrack(this.STREAM, this.sampleRate, AudioFormat.CHANNEL_OUT_MONO, AudioFormat.ENCODING_PCM_16BIT, buffer.length * 2,
-				AudioTrack.MODE_STATIC);
-		track.write(buffer, 0, buffer.length); // write to the audio buffer....
-												// and start all over again!
-		track.play();
-
-		while (track.getPlaybackHeadPosition() < buffer.length) {
-			sleep(1);
-		}
-		track.stop();
-		track.release();
-
-	}
-
 	private class AudioInTask extends AsyncTask<Void, Character, Void> {
 
 		protected void onProgressUpdate(Character... progress) {
-
+			log.i("Progress: %c",progress[0]);
 			textView.append(String.valueOf(progress[0]));
 		}
 
@@ -522,16 +296,14 @@ public class SonicActivity extends Activity {
 			// showDialog("Downloaded " + result + " bytes");
 		}
 
-		byte bytes[] = new byte[5 * 2];
 		byte biti = 0;
-		int bytei = bytes.length - 1;
 		long stamp = 0;
 
 		final int IDLE = 0;
 		final int START = 1;
 		final int HIGH_PULSE = 2;
 		final int LOW_PULSE = 3;
-		final int STOP = 4;
+		final int DONE = 4;
 		int state = IDLE;
 
 		/* table of Hamming codes hammingCodes[x] is the x encoded */
@@ -578,268 +350,94 @@ public class SonicActivity extends Activity {
 		};
 
 		final int WINDOW_SIZE = 128;
-		final int BIT_PERIOD = 10;
-		final int THRESHOLD = 333;
-		final float STAMP_MS = (float) WINDOW_SIZE / (SAMPLE_RATE / 1000);
-		long lastStamp;
+		final int BIT_PERIOD = 8;
+		final double STAMP_MS = (float) WINDOW_SIZE / (SAMPLE_RATE / 1000);
+		long lastStamp = 0;
+		int bank = 0;
+		int bytei = 0;
 
-		public void processNewSample(int newSample, double mag) {
-
-			// log.v("newSample %d %f", newSample, (stamp - lastStamp) *
-			// STAMP_MS);
-
-			if ((stamp - lastStamp) * STAMP_MS > (BIT_PERIOD * 5)) {
-				state = IDLE;
-				bytei = 0;
-			}
-
-			switch (state) {
-			case IDLE:
-				if (newSample == 0) {
-					state = START;
-					log.d("DIAL: %f", (stamp - lastStamp) * STAMP_MS);
-					lastStamp = stamp;
-				}
-				break;
-			case START:
-				biti = 0;
-				bytes[bytei] = 0;
-				if (newSample == 1) {
-					if ((stamp - lastStamp) * STAMP_MS > (BIT_PERIOD * 2)) {
-						log.d("START: %f", (stamp - lastStamp) * STAMP_MS);
-						state = HIGH_PULSE;
-					}
-					lastStamp = stamp;
-				}
-				break;
-			case HIGH_PULSE:
-			case LOW_PULSE:
-				if ((state == HIGH_PULSE && newSample == 0) || (state == LOW_PULSE && newSample == 1)) {
-					log.d("PULSE: %f", (stamp - lastStamp) * STAMP_MS);
-					if ((stamp - lastStamp) * STAMP_MS > (BIT_PERIOD * 3) / 2) {
-						bytes[bytei] |= 1 << biti;
-					} else {
-						bytes[bytei] &= ~(1 << biti);
-					}
-					state = state == HIGH_PULSE ? LOW_PULSE : HIGH_PULSE;
-					if (++biti == 7) {
-						state = newSample == 0 ? START : IDLE;
-
-						if ((bytes[bytei] & 0xF) != hammingDecode[bytes[bytei]])
-							log.w("Error corrected:");
-						log.i("%d:%x->%x", bytei, bytes[bytei], hammingDecode[bytes[bytei]]);
-						bytes[bytei] = hammingDecode[bytes[bytei]];
-						if (bytei + 1 == bytes.length) {
-							for (int i = 0; i < bytes.length / 2; i++) {
-								log.i("msg[%d]=%x", i, bytes[i * 2] | (bytes[i * 2 + 1] << 4));
-								if (i == 1)
-									publishProgress(new Character((char) (bytes[i * 2] | (bytes[i * 2 + 1] << 4))));
-							}
-						}
-						bytei = (bytei + 1) % bytes.length;
-					}
-					lastStamp = stamp;
-				}
-				break;
-			}
-
+		class Msg {
+			boolean ready = false;
+			byte[] bytes = new byte[10];
+			long stamp = 0;
+			int len = 0;
 		}
 
-		public void processNewState(int newState) {
+		Msg[] msgs = new Msg[10];
 
-			if (newState == state)
-				return;
-
-			if (newState == -1) {
-				/*
-				 * if (bytei >= 2) { log.i("byte[0]=%x byte[1]=%x byte[2]=%x",
-				 * bytes[0], bytes[1], bytes[2]); log.i("%x", (bytes[0] &
-				 * bytes[1] | bytes[0] & bytes[2] | bytes[1] & bytes[2]) &
-				 * 0xff); }
-				 */
-				// log.i("%x",bytes[0]);
-				// log.v("biti=%d bytei=%d",biti,bytei);
-				log.d("reset");
-				biti = -1;
-
-				// bytei = (bytei + 1) % bytes.length;
-
-				bytei = 0;
-
-			} else if (newState == 0) {
-				// log.v("%d->%d=%d",state,newState,0);
-				bytes[bytei] &= ~(1 << biti);
-			} else if (newState == 2) {
-				bytes[bytei] |= 1 << biti;
-			} else if (newState == 1) {
-				if (state == -1) {
-					// log.w("invalid bit");
-					biti = -1;
-				} else if (state == 0) {
-					bytes[bytei] &= ~(1 << biti);
-				} else if (state == 2) {
-					bytes[bytei] |= 1 << biti;
-				}
-			}
-
-			if (++biti == 8) {
-				log.d("byte[%d]=%x", bytei, bytes[bytei]);
-				biti = 0;
-				bytei = (bytei + 1) % bytes.length;
-				if (bytei == 0) {
-					int sum = 0;
-					for (int i = 0; i < bytes.length - 1; i++) {
-						sum += bytes[i];
-					}
-					byte calcsum = (byte) (sum & 0xff);
-					byte rcvdsum = bytes[bytes.length - 1];
-					if (calcsum == rcvdsum) {
-						log.i("pass");
-						publishProgress(new Character((char) bytes[1]));
-					} else {
-						log.i("fail expecting %x got %x", calcsum, rcvdsum);
-					}
-					for (int i = 0; i < bytes.length; i++) {
-						bytes[i] = 0;
-					}
-
-				}
-			}
-			state = newState;
-		}
-
-		int goertzelEmbedded(final int j, final short[] buffer, double[] mag, double[] Q1, double[] Q2, final double[] COEFF) {
-
-			int maxi = 0;
-			for (int i = 0; i < IN_TONES.length; i++) {
-				Q1[i] = Q2[i] = 0;
-				// avg[i] = 1;
-				for (int k = 0; k < WINDOW_SIZE; k++) {
-					// avg[i] += buffer[j];
-					// log.v("%d", buffer[j * WINDOW_SIZE + k]);
-					int sample = (buffer[j * WINDOW_SIZE + k] - Short.MIN_VALUE) >> 8;
-
-					double Q0 = -1 * (Q1[i] + ((int) Q1[i] >> 2)) - Q2[i] + sample;
-					Q2[i] = Q1[i];
-					Q1[i] = Q0;
-				}
-				mag[i] = Math.sqrt(Q1[i] * Q1[i] + Q2[i] * Q2[i] - COEFF[i] * Q1[i] * Q2[i]);
-				if (mag[i] > mag[maxi])
-					maxi = i;
-			}
-			return maxi;
-		}
-
-		int maxSample = 0;
-		int minSample = 0;
-
-		int goertzel(final int j, final short[] buffer, double[] mag, double[] Q1, double[] Q2, final double[] COEFF) {
-
-			int maxi = 0;
-			for (int i = 0; i < IN_TONES.length; i++) {
-				Q1[i] = Q2[i] = 0;
-				// avg[i] = 1;
-				for (int k = 0; k < WINDOW_SIZE; k++) {
-					// avg[i] += buffer[j];
-					// log.v("%d", buffer[j * WINDOW_SIZE + k]);
-					int sample = buffer[j * WINDOW_SIZE + k];
-					if (sample > maxSample)
-						maxSample = sample;
-					if (sample < minSample)
-						minSample = sample;
-					log.v("%d %d", minSample, maxSample);
-					double Q0 = COEFF[i] * Q1[i] - Q2[i] + buffer[j * WINDOW_SIZE + k];
-					Q2[i] = Q1[i];
-					Q1[i] = Q0;
-				}
-				mag[i] = Math.sqrt(Q1[i] * Q1[i] + Q2[i] * Q2[i] - COEFF[i] * Q1[i] * Q2[i]);
-				if (mag[i] > mag[maxi])
-					maxi = i;
-			}
-			return maxi;
-		}
-		
 		double goertzelSimple(final short[] buffer, final int bufferOffset, final double COEFF) {
-			
-			double Q1 = 0, Q2=0;
-			for (int s=0; s<WINDOW_SIZE; s++) {
-				double Q0 = COEFF * Q1 - Q2 + buffer[bufferOffset+s];
+
+			double Q1 = 0, Q2 = 0;
+			for (int s = 0; s < WINDOW_SIZE; s++) {
+				double Q0 = COEFF * Q1 - Q2 + buffer[bufferOffset + s];
 				Q2 = Q1;
 				Q1 = Q0;
 			}
 			return Math.sqrt(Q1 * Q1 + Q2 * Q2 - COEFF * Q1 * Q2);
-			
+
 		}
-		
-		void FMSimpleRecv(byte smpl) {
-			  byte newBit;
-			  unsigned long stamp = millis();
-			  unsigned int diff = stamp - lastStamp;
 
-			  if(state != IDLE && diff > BIT_PERIOD*4) {
-			    state = IDLE;
-			    msgs[bank].len = bytei;
-			    msgs[bank].ready = true;
-			    Serial.print("Block ready:");
-			    Serial.print(bank);
-			    Serial.print(" ");
-			    Serial.println(bytei);
+		boolean lastSmpl = false;
+		byte block = 0;
 
-			    bank = (bank + 1)%NUM_MSGS;
-			    msgs[bank].ready = false;
-			    bytei = 0;
-			  }  
+		void FMSimpleRecv(boolean smpl) {
 
-			  if(lastSmpl!=smpl){
-			    lastSmpl = smpl;
-			    //unsigned long stamp = millis();
-			    //Serial.println(diff);
-			    switch(state) {
-			    case IDLE:
-			      if(smpl == 1) {
-			        lastStamp = stamp;
-			        state = START;
-			      }
-			      break;
-			    case START:
-			      block = 0;
-			      biti = 0;
-			      state = DONE;
-			      if(diff > BIT_PERIOD_3_2) {
-			        //Serial.println(diff);
-			        state = LOW_PULSE;
-			      }
-			      //else {
-			      //  Serial.println("START pulse too short");
-			      //}
-			      break;
-			    case LOW_PULSE:
-			      //newBit = 0;
-			      if(diff > BIT_PERIOD_3_2) {
-			        //newBit = 1;
-			        block |= 1<<biti;
-			      }
-			      lastStamp = stamp;
-			      state = HIGH_PULSE;
+			double diff = (stamp - lastStamp) * STAMP_MS;
 
-			      if(++biti==8) {
-			        state = START;
-			        Serial.println(block,HEX);
-			        msgs[bank].bytes[bytei++] = block;
-			        //if(bytei == bytej) Serial.println("TOO SLOW");
-			      }
-			      break;
-			    case HIGH_PULSE:
-			      state = LOW_PULSE;
-			      if(diff > BIT_PERIOD_3_2) {
-			        Serial.println("HIGH_PULSE too long");
-			        state = DONE;
-			      }
-			      break;
-			    }
-			  }
-			}  
+			if (state != IDLE && diff > BIT_PERIOD * 4) {
+				state = IDLE;
+				if(bytei>0) {
+					msgs[bank].len = bytei;
+					msgs[bank].ready = true;
+					log.v("Block ready | len=%d bank=%d", bytei, bank);
+					this.publishProgress(new Character((char)msgs[bank].bytes[0]));
+					bank = (bank + 1) % msgs[bank].bytes.length;
+					msgs[bank].ready = false;
+				}
+				log.w("reset");
+				bytei = block = biti = 0;
+			}
 
+			if (lastSmpl != smpl) {
+				//log.v("smpl=%d diff=%f biti=%d block=%x", smpl ? 1 : 0, diff, biti, block);
+				lastSmpl = smpl;
+				switch (state) {
+				case IDLE:
+					if (smpl == true) {
+						lastStamp = stamp;
+						state = HIGH_PULSE;
+					}
+					break;
+				case LOW_PULSE:
+					// newBit = 0;
+					log.v("diff=%f biti=%d magRng=%f-%f", diff, biti,maxMag,minMag);
+					maxMag = 0;
+					minMag = 99999999999999.9;
+					if (diff > BIT_PERIOD * 2.75) {
+						// newBit = 1;
+						block |= 1 << biti;
+						//log.v("+1 %x", block);
+					}
+					lastStamp = stamp;
+					state = HIGH_PULSE;
+					
+					if (++biti == 8) {
+						state = HIGH_PULSE;
+						log.i("Byte:%x", block);
+						msgs[bank].bytes[bytei++] = block;
+						block = biti = 0;
+						// if(bytei == bytej) Serial.println("TOO SLOW");
+					}
+					break;
+				case HIGH_PULSE:
+					state = LOW_PULSE;
+					break;
+				}
+			}
+		}
+
+		double maxMag=0;
+		double minMag=9999999999999.9;
 		@Override
 		protected Void doInBackground(Void... arg0) {
 
@@ -861,15 +459,12 @@ public class SonicActivity extends Activity {
 				COEFF[i] = 2.0 * Math.cos(2 * Math.PI * IN_TONES[i] / SAMPLE_RATE);
 			}
 
-			double Q1[] = new double[IN_TONES.length];
-			double Q2[] = new double[IN_TONES.length];
-			double mag[] = new double[IN_TONES.length];
+			for (int i = 0; i < msgs.length; i++) {
+				msgs[i] = new Msg();
+			}
 
-			int zcount = 0;
-
-			final int NEW_SAMPLE_MATCH = 2;
-			int lastNewSample = -1;
-			int newSampleMatchCount = 0;
+			final double ON_THRESHOLD = 8000;//16384;
+			final double OFF_THRESHOLD = ON_THRESHOLD * 1 / 2;
 
 			while (true) {
 
@@ -880,44 +475,15 @@ public class SonicActivity extends Activity {
 
 				for (int j = 0; j < read / WINDOW_SIZE; j++) {
 					stamp++;
-					//int maxi = goertzelEmbedded(j, buffer, mag, Q1, Q2, COEFF);
-					double mag = goertzelSimple(buffer, j*WINDOW_SIZE,  COEFF[0]);
-					/*
-					 * for (int i = 0; i < IN_TONES.length; i++) { Q1[i] = Q2[i]
-					 * = 0; // avg[i] = 1; for (int k = 0; k < WINDOW_SIZE; k++)
-					 * { // avg[i] += buffer[j]; double Q0 = COEFF[i] * Q1[i] -
-					 * Q2[i] + buffer[j * WINDOW_SIZE + k]; Q2[i] = Q1[i]; Q1[i]
-					 * = Q0; } mag[i] = Math.sqrt(Q1[i] * Q1[i] + Q2[i] * Q2[i]
-					 * - COEFF[i] * Q1[i] * Q2[i]); if (mag[i] > mag[maxi]) maxi
-					 * = i; }
-					 */
-
-					// log.v("max:%d=%f",maxi,mag[maxi]);
-					int newSample = -1;
-					if (mag[maxi] > THRESHOLD) {
-						log.v("max:%d=%f", maxi, mag[maxi]);
-						// log.d("mag[0]=%f mag[1]=%f mag[2]=%f",mag[0],mag[1],mag[2]);
-						newSample = maxi;
-						processNewSample(maxi, mag[maxi]);
-
+					double mag = goertzelSimple(buffer, j * WINDOW_SIZE, COEFF[0]);
+					if (mag > maxMag) maxMag = mag;
+					if(mag < minMag) minMag = mag;
+					if (mag > ON_THRESHOLD) {
+						// log.v("mag = %f",mag);
+						FMSimpleRecv(true);
+					} else if (mag < OFF_THRESHOLD) {
+						FMSimpleRecv(false);
 					}
-
-					if (newSample == lastNewSample) {
-						if (++newSampleMatchCount == NEW_SAMPLE_MATCH) {
-							// processNewSample(newSample);
-						}
-					} else {
-						newSampleMatchCount = 0;
-					}
-					lastNewSample = newSample;
-					/*
-					 * else if (++zcount == NEW_STATE_SAMPLES*3) {
-					 * log.d("reset"); for (int i = 0; i < NEW_STATE_SAMPLES;
-					 * i++) { newStateSamples[i] = 1; } processNewState(-1);
-					 * continue;
-					 * 
-					 * }
-					 */
 
 				}
 			}
